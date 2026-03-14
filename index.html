@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Audio Monitor v2</title>
+    <title>Remote Audio Monitor Final</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; background: #f0f2f5; color: #1c1e21; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: inline-block; max-width: 450px; width: 100%; }
-        .id-box { background: #e7f3ff; color: #1877f2; padding: 15px; border-radius: 8px; font-size: 1.5em; font-weight: bold; margin: 20px 0; border: 1px dashed #1877f2; }
+        .id-box { background: #e7f3ff; color: #1877f2; padding: 15px; border-radius: 8px; font-size: 1.5em; font-weight: bold; margin: 20px 0; border: 1px dashed #1877f2; min-height: 40px; }
         input { width: 90%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; font-size: 1em; }
         button { width: 96%; padding: 12px; cursor: pointer; background: #1877f2; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; }
-        button:hover { background: #166fe5; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
         #status { margin-top: 20px; font-weight: 500; color: #606770; }
         .live-indicator { height: 12px; width: 12px; background: #fa3e3e; border-radius: 50%; display: inline-block; margin-right: 5px; animation: blink 1.2s infinite; display: none; }
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
@@ -22,12 +22,12 @@
     <div class="card">
         <h2>Audio Monitor</h2>
         <p>ഈ ഡിവൈസിന്റെ ഐഡി (ID):</p>
-        <div id="my-id" class="id-box">ലോഡ് ആകുന്നു...</div>
+        <div id="my-id" class="id-box">ലൈബ്രറി ലോഡ് ആകുന്നു...</div>
         
         <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
         
         <input type="text" id="remote-id" placeholder="മറ്റേ ഡിവൈസ് ID ടൈപ്പ് ചെയ്യുക">
-        <button onclick="startListening()">Live ആയി കേൾക്കുക</button>
+        <button id="connect-btn" onclick="startListening()" disabled>Live ആയി കേൾക്കുക</button>
         
         <div id="status">
             <span id="live-dot" class="live-indicator"></span>
@@ -38,94 +38,94 @@
     </div>
 
     <script>
-        let peer;
+        let peer = null; // തുടക്കത്തിൽ null ആയി സെറ്റ് ചെയ്യുന്നു
         const myIdDisplay = document.getElementById('my-id');
         const statusText = document.getElementById('status-text');
         const liveDot = document.getElementById('live-dot');
         const remoteAudio = document.getElementById('remote-audio');
+        const connectBtn = document.getElementById('connect-btn');
 
-        // PeerJS ഇനീഷ്യലൈസ് ചെയ്യുന്നു
+        // PeerJS തുടങ്ങുന്നു
         function initPeer() {
-            peer = new Peer({
-                config: {
-                    'iceServers': [
-                        { url: 'stun:stun.l.google.com:19302' },
-                        { url: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
+            try {
+                peer = new Peer({
+                    debug: 2,
+                    config: {
+                        'iceServers': [{ url: 'stun:stun.l.google.com:19302' }]
+                    }
+                });
 
-            peer.on('open', (id) => {
-                myIdDisplay.innerText = id;
-                statusText.innerText = "കണക്ഷൻ റെഡിയാണ്";
-            });
+                peer.on('open', (id) => {
+                    myIdDisplay.innerText = id;
+                    statusText.innerText = "കണക്ഷൻ റെഡിയാണ്";
+                    connectBtn.disabled = false; // ഐഡി കിട്ടിയാൽ മാത്രം ബട്ടൺ വർക്ക് ആകും
+                });
 
-            // ഇൻകമിംഗ് കോൾ (ഓഫീസ് ഫോണിന് വേണ്ടി)
-            peer.on('call', (call) => {
-                statusText.innerText = "ശബ്ദം അയച്ചുകൊണ്ടിരിക്കുന്നു...";
-                liveDot.style.display = "inline-block";
-                
-                navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                    .then((stream) => {
-                        call.answer(stream);
-                        call.on('close', () => {
-                            liveDot.style.display = "none";
-                            statusText.innerText = "കണക്ഷൻ അവസാനിച്ചു";
+                peer.on('call', (call) => {
+                    statusText.innerText = "മൈക്ക് വഴി ശബ്ദം അയക്കുന്നു...";
+                    liveDot.style.display = "inline-block";
+                    
+                    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                        .then((stream) => {
+                            call.answer(stream);
+                            call.on('close', () => {
+                                liveDot.style.display = "none";
+                                statusText.innerText = "കണക്ഷൻ അവസാനിച്ചു";
+                            });
+                        })
+                        .catch(err => {
+                            statusText.innerText = "മൈക്ക് പെർമിഷൻ ലഭിച്ചില്ല!";
+                            console.error(err);
                         });
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        statusText.innerText = "മൈക്ക് ആക്സസ് ചെയ്യാൻ കഴിഞ്ഞില്ല!";
-                    });
-            });
+                });
 
-            peer.on('error', (err) => {
-                console.error('PeerJS Error:', err.type);
-                if(err.type === 'browser-incompatible') {
-                    statusText.innerText = "ഈ ബ്രൗസർ സപ്പോർട്ട് ചെയ്യുന്നില്ല!";
-                } else {
-                    statusText.innerText = "എറർ: " + err.type;
-                }
-            });
+                peer.on('error', (err) => {
+                    console.error('PeerJS Error:', err);
+                    statusText.innerText = "Error: " + err.type;
+                });
 
-            peer.on('disconnected', () => {
-                statusText.innerText = "കണക്ഷൻ നഷ്ടപ്പെട്ടു. വീണ്ടും ശ്രമിക്കുന്നു...";
-                peer.reconnect();
-            });
+            } catch (e) {
+                console.error("Initialization error:", e);
+                statusText.innerText = "സിസ്റ്റം തുടങ്ങാൻ കഴിഞ്ഞില്ല.";
+            }
         }
 
-        // ലൈവ് കേൾക്കാൻ വേണ്ടി (ലാപ്ടോപ്പിന് വേണ്ടി)
+        // ലൈവ് കേൾക്കാൻ
         function startListening() {
             const rId = document.getElementById('remote-id').value;
+            
+            // ഏറ്റവും പ്രധാനപ്പെട്ട ചെക്കിംഗ്
+            if (!peer || !peer.open) {
+                alert("സിസ്റ്റം ഇതുവരെ റെഡിയായിട്ടില്ല. ദയവായി കാത്തിരിക്കുക.");
+                return;
+            }
+
             if (!rId) return alert("ദയവായി ID നൽകുക");
-            if (!peer) return alert("സിസ്റ്റം റെഡിയായിട്ടില്ല, പേജ് റിഫ്രഷ് ചെയ്യുക.");
 
             statusText.innerText = "കണക്ട് ചെയ്യുന്നു...";
             const call = peer.call(rId, null); 
             
-            call.on('stream', (stream) => {
-                remoteAudio.srcObject = stream;
-                remoteAudio.play();
-                statusText.innerText = "ലൈവ് സംപ്രേക്ഷണം നടക്കുന്നു";
-                liveDot.style.display = "inline-block";
-            });
+            if (call) {
+                call.on('stream', (stream) => {
+                    remoteAudio.srcObject = stream;
+                    remoteAudio.play();
+                    statusText.innerText = "ലൈവ് സംപ്രേക്ഷണം നടക്കുന്നു";
+                    liveDot.style.display = "inline-block";
+                });
+            } else {
+                statusText.innerText = "കോൾ പരാജയപ്പെട്ടു.";
+            }
         }
 
-        // പേജ് ലോഡ് ആകുമ്പോൾ PeerJS തുടങ്ങുക
+        // വിൻഡോ ലോഡ് ആകുമ്പോൾ
         window.onload = () => {
             if (typeof Peer !== 'undefined') {
                 initPeer();
             } else {
-                statusText.innerText = "ലൈബ്രറി ലോഡ് ആയില്ല. ഇന്റർനെറ്റ് പരിശോധിക്കുക.";
+                myIdDisplay.innerText = "Error!";
+                statusText.innerText = "ലൈബ്രറി ബ്ലോക്ക് ചെയ്യപ്പെട്ടു. ബ്രൗസർ മാറ്റുക.";
             }
         };
-
-        // ഫോൺ അൺലോക്ക് ചെയ്യുമ്പോൾ റീകണക്ട് ചെയ്യാൻ
-        document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState === 'visible' && peer && peer.disconnected) {
-                peer.reconnect();
-            }
-        });
     </script>
 </body>
 </html>
