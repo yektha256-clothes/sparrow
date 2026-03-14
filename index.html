@@ -8,9 +8,9 @@
     <style>
         body { background: #1a1a1a; color: #d4af37; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
         .pirate-box { border: 2px solid #d4af37; padding: 20px; border-radius: 10px; display: inline-block; max-width: 500px; width: 90%; }
-        .hidden-input { background: #222; border: 1px solid #d4af37; color: #d4af37; padding: 12px; width: 80%; border-radius: 5px; text-align: center; }
-        button { background: #d4af37; color: black; border: none; padding: 12px 25px; cursor: pointer; margin-top: 15px; font-weight: bold; border-radius: 5px; }
-        #log { font-size: 10px; color: #444; margin-top: 40px; }
+        .hidden-input { background: #222; border: 1px solid #d4af37; color: #d4af37; padding: 12px; width: 80%; border-radius: 5px; text-align: center; margin-bottom: 10px; }
+        button { background: #d4af37; color: black; border: none; padding: 12px 25px; cursor: pointer; font-weight: bold; border-radius: 5px; }
+        #log { font-size: 11px; color: #666; margin-top: 40px; background: #222; padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -24,50 +24,71 @@
             <button id="board-btn" onclick="connectToCaptain()">Board the Ship</button>
         </div>
     </div>
-    <div id="log">System: Ready</div>
+    <div id="log">System: Initializing...</div>
     <audio id="receiver-audio" autoplay playsinline></audio>
 
     <script>
-        const MY_OFFICE_ID = 'jack-sparrow-office-007'; 
+        const OFFICE_ID = 'jack-sparrow-office-007'; 
         let peer = null;
 
-        function initPeer() {
-            // ലാപ്ടോപ്പിൽ തുറക്കുമ്പോൾ ഐഡി ഇല്ലാതെ തുറക്കാൻ ശ്രമിക്കുന്നു
-            const isReceiver = window.location.search.includes('receiver');
-            peer = new Peer(isReceiver ? null : MY_OFFICE_ID);
+        function init() {
+            // URL ചെക്ക് ചെയ്യുന്നു
+            const params = new URLSearchParams(window.location.search);
+            const isReceiver = params.has('receiver');
+
+            // Receiver ആണെങ്കിൽ ID ഇല്ലാതെ തുടങ്ങുന്നു, അല്ലെങ്കിൽ OFFICE_ID ഉപയോഗിക്കുന്നു
+            peer = new Peer(isReceiver ? null : OFFICE_ID, {
+                debug: 2,
+                config: {'iceServers': [{ url: 'stun:stun.l.google.com:19302' }]}
+            });
 
             peer.on('open', (id) => {
-                document.getElementById('log').innerText = "System: Online | Port: " + id;
+                document.getElementById('log').innerText = "ONLINE | ID: " + id;
+                console.log("Connected with ID: " + id);
             });
 
             peer.on('call', (call) => {
                 navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
                     call.answer(stream);
+                    document.getElementById('log').innerText = "Streaming Audio...";
+                }).catch(err => {
+                    document.getElementById('log').innerText = "Mic Error: " + err;
                 });
             });
 
             peer.on('error', (err) => {
+                document.getElementById('log').innerText = "Error: " + err.type;
                 if (err.type === 'id-taken') {
-                    document.getElementById('log').innerText = "ID is taken. Operating as Receiver.";
-                    // ഐഡി എറർ വന്നാൽ ഒരു പുതിയ റാൻഡം ഐഡിയിൽ വീണ്ടും തുടങ്ങുന്നു
-                    peer = new Peer(); 
-                    peer.on('open', (id) => {
-                        document.getElementById('log').innerText = "Receiver Port: " + id;
-                    });
+                    document.getElementById('log').innerText = "ID is taken. USE THE RECEIVER LINK!";
                 }
             });
         }
 
         function connectToCaptain() {
             const target = document.getElementById('target-id').value;
-            if(!peer) return;
+            if (!peer || !peer.open) {
+                alert("System not ready or Peer destroyed. Refreshing...");
+                location.reload();
+                return;
+            }
+
+            if (!target) return alert("Enter the Office ID!");
+
+            document.getElementById('log').innerText = "Connecting to " + target + "...";
             const call = peer.call(target, null);
-            call.on('stream', (stream) => {
-                document.getElementById('receiver-audio').srcObject = stream;
-            });
+
+            if (call) {
+                call.on('stream', (stream) => {
+                    document.getElementById('log').innerText = "CONNECTED!";
+                    const audio = document.getElementById('receiver-audio');
+                    audio.srcObject = stream;
+                    audio.play();
+                });
+                call.on('error', (e) => alert("Call Error: " + e));
+            }
         }
 
-        window.onload = initPeer;
+        window.onload = init;
     </script>
 </body>
 </html>
