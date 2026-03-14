@@ -6,14 +6,14 @@
     <title>Jack Sparrow - Fan Central</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
     <style>
-        body { background: #1a1a1a; color: #d4af37; font-family: 'Courier New', Courier, monospace; text-align: center; padding: 50px; }
-        .pirate-box { border: 2px solid #d4af37; padding: 20px; border-radius: 10px; display: inline-block; max-width: 500px; }
-        h1 { font-size: 24px; text-transform: uppercase; }
-        p { color: #888; font-size: 14px; }
-        #status-light { height: 5px; width: 5px; background: #222; border-radius: 50%; display: inline-block; }
-        .hidden-input { background: transparent; border: 1px solid #333; color: #333; padding: 5px; margin-top: 20px; width: 100%; border-radius: 5px; }
-        button { background: #d4af37; color: black; border: none; padding: 10px 20px; cursor: pointer; margin-top: 10px; font-weight: bold; border-radius: 5px; }
-        #log { font-size: 10px; color: #333; margin-top: 50px; }
+        body { background: #1a1a1a; color: #d4af37; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
+        .pirate-box { border: 2px solid #d4af37; padding: 20px; border-radius: 10px; display: inline-block; max-width: 500px; width: 90%; }
+        h1 { font-size: 24px; text-transform: uppercase; margin-bottom: 5px; }
+        p { color: #888; font-size: 14px; margin-bottom: 20px; }
+        .hidden-input { background: #222; border: 1px solid #d4af37; color: #d4af37; padding: 12px; width: 80%; border-radius: 5px; text-align: center; }
+        button { background: #d4af37; color: black; border: none; padding: 12px 25px; cursor: pointer; margin-top: 15px; font-weight: bold; border-radius: 5px; transition: 0.3s; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        #log { font-size: 10px; color: #444; margin-top: 40px; }
     </style>
 </head>
 <body>
@@ -22,53 +22,102 @@
         <h1>Captain Jack Sparrow</h1>
         <p>"Not all treasure is silver and gold, mate."</p>
         <img src="https://img.icons8.com/color/96/jack-sparrow.png" alt="Jack">
-        <div id="status-light"></div>
-
-        <div style="margin-top: 30px;">
-            <input type="text" id="target-id" class="hidden-input" placeholder="Enter Secret Code">
-            <button onclick="connectToCaptain()">Board the Ship</button>
+        
+        <div style="margin-top: 20px;">
+            <input type="text" id="target-id" class="hidden-input" placeholder="Enter Secret Code...">
+            <br>
+            <button id="board-btn" onclick="connectToCaptain()" disabled>Board the Ship</button>
         </div>
     </div>
 
-    <div id="log">System: Stable | Version 1.0.4</div>
+    <div id="log">System: Initializing...</div>
     <audio id="receiver-audio" autoplay playsinline></audio>
 
     <script>
-        // പബ്ലിക് ആയി കാണുന്ന ഐഡി (ഇതാണ് ലാപ്ടോപ്പിൽ അടിക്കേണ്ടത്)
-        const SECRET_ID = 'jack-sparrow-office-007'; 
-        
-        let peer = new Peer(SECRET_ID);
+        // ലാപ്ടോപ്പിൽ കണക്ട് ചെയ്യുമ്പോൾ ഉപയോഗിക്കേണ്ട സ്ഥിരമായ ഐഡി
+        const MY_OFFICE_ID = 'jack-sparrow-office-007'; 
+        let peer = null;
 
-        peer.on('open', (id) => {
-            console.log('Ship is ready at port: ' + id);
-            document.getElementById('log').innerText = "System: Connected to Port " + id;
-        });
-
-        // ഇൻകമിംഗ് കോൾ (ഓഫീസ് ഫോൺ മോഡ്)
-        peer.on('call', (call) => {
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then((stream) => {
-                    call.answer(stream);
-                    document.getElementById('status-light').style.background = "#d4af37"; // കണക്ട് ആകുമ്പോൾ ചെറിയൊരു മാറ്റം
-                });
-        });
-
-        // ലാപ്ടോപ്പിൽ നിന്ന് കണക്ട് ചെയ്യാൻ (Receiver Mode)
-        function connectToCaptain() {
-            const target = document.getElementById('target-id').value;
-            if(!target) return;
+        function initPeer() {
+            // ഓരോ ഡിവൈസിനും തനതായ ഒരു ഐഡി ജനറേറ്റ് ചെയ്യുന്നു (അല്ലെങ്കിൽ ഒരേ ഐഡി വന്ന് എറർ ആകും)
+            // ഓഫീസിലെ ഫോണിൽ ഈ പേജ് തുറക്കുമ്പോൾ അത് 'jack-sparrow-office-007' ആയിരിക്കും.
+            // ലാപ്ടോപ്പിൽ തുറക്കുമ്പോൾ അതൊരു റാൻഡം ഐഡി ആയിരിക്കും.
             
-            const call = peer.call(target, null);
-            call.on('stream', (remoteStream) => {
-                const audio = document.getElementById('receiver-audio');
-                audio.srcObject = remoteStream;
-                audio.play();
-                alert("Connected to the ship!");
+            const isOfficePhone = !window.location.hash.includes('receiver');
+            const currentId = isOfficePhone ? MY_OFFICE_ID : null;
+
+            peer = new Peer(currentId, {
+                debug: 2,
+                config: {'iceServers': [{ url: 'stun:stun.l.google.com:19302' }]}
+            });
+
+            peer.on('open', (id) => {
+                console.log('My ID: ' + id);
+                document.getElementById('log').innerText = "System: Stable | Port: " + id;
+                document.getElementById('board-btn').disabled = false; // റെഡിയായാൽ ബട്ടൺ ആക്റ്റീവ് ആകും
+            });
+
+            // ഓഫീസിലെ ഫോണിൽ ശബ്ദം അയക്കാൻ
+            peer.on('call', (call) => {
+                navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                    .then((stream) => {
+                        call.answer(stream);
+                        document.getElementById('log').innerText = "System: Data Streaming...";
+                    })
+                    .catch(err => alert("Mic Error: " + err));
+            });
+
+            peer.on('error', (err) => {
+                console.error(err);
+                if (err.type === 'id-taken') {
+                    // ഐഡി നിലവിൽ ഉണ്ടെങ്കിൽ (ലാപ്ടോപ്പിൽ വരുമ്പോൾ ഇത് സംഭവിക്കാം)
+                    document.getElementById('log').innerText = "System: Port Busy. Ready as Receiver.";
+                    document.getElementById('board-btn').disabled = false;
+                }
             });
         }
 
-        // ഓട്ടോമാറ്റിക് റീകണക്ഷൻ
-        peer.on('disconnected', () => peer.reconnect());
+        // ലാപ്ടോപ്പിൽ നിന്ന് കണക്ട് ചെയ്യാൻ
+        function connectToCaptain() {
+            const target = document.getElementById('target-id').value;
+            if(!target) return alert("Enter Code!");
+            
+            // peer ഉണ്ടോ എന്ന് ഉറപ്പുവരുത്തുന്നു (Uncaught TypeError ഒഴിവാക്കാൻ)
+            if(!peer || !peer.open) {
+                alert("System not ready. Refreshing...");
+                location.reload();
+                return;
+            }
+
+            document.getElementById('log').innerText = "System: Attempting Connection...";
+            const call = peer.call(target, null);
+            
+            if(call) {
+                call.on('stream', (remoteStream) => {
+                    const audio = document.getElementById('receiver-audio');
+                    audio.srcObject = remoteStream;
+                    audio.play().catch(e => alert("Play error: " + e));
+                    document.getElementById('log').innerText = "System: Connected Successfully!";
+                });
+                
+                call.on('error', (err) => alert("Call Error: " + err));
+            }
+        }
+
+        // ലൈബ്രറി ലോഡ് ആയി എന്ന് ഉറപ്പുവരുത്തുന്നു
+        window.onload = () => {
+            if (typeof Peer !== 'undefined') {
+                initPeer();
+            } else {
+                document.getElementById('log').innerText = "System: PeerJS Library Failed!";
+            }
+        };
+
+        // റീകണക്ഷൻ
+        setInterval(() => {
+            if (peer && peer.disconnected) peer.reconnect();
+        }, 5000);
+
     </script>
 </body>
 </html>
