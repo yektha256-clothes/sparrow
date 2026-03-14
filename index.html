@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Audio Monitor Pro</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 20px; background: #eef2f3; color: #333; }
+        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: inline-block; max-width: 400px; width: 100%; }
+        .id-badge { background: #007bff; color: white; padding: 10px; border-radius: 5px; font-size: 1.2em; font-weight: bold; margin: 15px 0; display: block; }
+        button { width: 100%; padding: 12px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 1em; margin-top: 10px; transition: 0.3s; }
+        button:hover { background: #218838; }
+        input { width: 93%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; margin-top: 10px; text-align: center; }
+        #status { margin-top: 20px; font-size: 0.9em; color: #666; }
+        .live-dot { height: 10px; width: 10px; background-color: #ff0000; border-radius: 50%; display: inline-block; margin-right: 5px; animation: blink 1s infinite; display: none; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Audio Monitor</h2>
+        <p>ഈ ഫോണിന്റെ ID താഴെ നൽകുന്നു:</p>
+        <div id="my-id" class="id-badge">ID ലോഡ് ആകുന്നു...</div>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        
+        <h3>മറ്റൊരു ഫോണിൽ നിന്ന് കേൾക്കാൻ</h3>
+        <input type="text" id="remote-id" placeholder="അപ്പുറത്തെ ഫോൺ ID ടൈപ്പ് ചെയ്യുക">
+        <button onclick="startListening()">Live ആയി കേൾക്കുക</button>
+        
+        <div id="status">
+            <span id="live-indicator" class="live-dot"></span>
+            <span id="status-text">സിസ്റ്റം തയ്യാറാണ്</span>
+        </div>
+        
+        <audio id="remote-audio" autoplay playsinline></audio>
+    </div>
+
+    <script>
+        const myIdDisplay = document.getElementById('my-id');
+        const statusText = document.getElementById('status-text');
+        const liveIndicator = document.getElementById('live-indicator');
+        const remoteAudio = document.getElementById('remote-audio');
+
+        // PeerJS കണക്ഷൻ സെറ്റപ്പ്
+        const peer = new Peer({
+            config: {'iceServers': [
+                { url: 'stun:stun.l.google.com:19302' }, // ഇന്റർനെറ്റിൽ കണക്ട് ആകാൻ സഹായിക്കുന്നു
+            ]}
+        });
+
+        peer.on('open', (id) => {
+            myIdDisplay.innerText = id;
+            statusText.innerText = "കണക്ഷൻ റെഡിയാണ്";
+        });
+
+        // ഓഫീസിലെ ഫോണിൽ കോൾ വരുമ്പോൾ ഓട്ടോമാറ്റിക് ആയി മറുപടി നൽകാൻ
+        peer.on('call', (call) => {
+            statusText.innerText = "ശബ്ദം അയച്ചുകൊണ്ടിരിക്കുന്നു...";
+            liveIndicator.style.display = "inline-block";
+            
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then((stream) => {
+                    call.answer(stream);
+                    
+                    // കണക്ഷൻ കട്ടായാൽ ഇൻഡിക്കേറ്റർ മാറ്റാൻ
+                    call.on('close', () => {
+                        liveIndicator.style.display = "none";
+                        statusText.innerText = "കണക്ഷൻ അവസാനിച്ചു";
+                    });
+                })
+                .catch(err => {
+                    alert("മൈക്ക് പെർമിഷൻ നൽകിയിട്ടില്ല!");
+                    console.error(err);
+                });
+        });
+
+        // ലാപ്ടോപ്പിൽ നിന്ന് ഓഫീസിലെ ഫോണിലേക്ക് കണക്ട് ചെയ്യാൻ
+        function startListening() {
+            const rId = document.getElementById('remote-id').value;
+            if (!rId) return alert("ദയവായി ID നൽകുക");
+
+            statusText.innerText = "കണക്ട് ചെയ്യുന്നു...";
+            const call = peer.call(rId, null); 
+            
+            call.on('stream', (stream) => {
+                remoteAudio.srcObject = stream;
+                remoteAudio.play();
+                statusText.innerText = "ലൈവ് സംപ്രേക്ഷണം നടക്കുന്നു";
+                liveIndicator.style.display = "inline-block";
+            });
+
+            call.on('error', (err) => {
+                statusText.innerText = "Error: " + err;
+                liveIndicator.style.display = "none";
+            });
+        }
+
+        // ഓട്ടോമാറ്റിക് റീകണക്ഷൻ ലോജിക്
+        peer.on('disconnected', () => {
+            statusText.innerText = "കണക്ഷൻ നഷ്ടപ്പെട്ടു. വീണ്ടും ശ്രമിക്കുന്നു...";
+            peer.reconnect();
+        });
+
+        // ഫോൺ അൺലോക്ക് ചെയ്യുമ്പോൾ പേജ് പുതുക്കാൻ
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === 'visible' && peer.disconnected) {
+                peer.reconnect();
+            }
+        });
+
+    </script>
+</body>
+</html>
