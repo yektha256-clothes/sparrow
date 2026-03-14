@@ -6,89 +6,133 @@
     <title>Jack Sparrow - Fan Central</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
     <style>
-        body { background: #1a1a1a; color: #d4af37; font-family: 'Courier New', monospace; text-align: center; padding: 50px; }
-        .pirate-box { border: 2px solid #d4af37; padding: 20px; border-radius: 10px; display: inline-block; max-width: 500px; width: 90%; }
-        .hidden-input { background: #222; border: 1px solid #d4af37; color: #d4af37; padding: 12px; width: 80%; border-radius: 5px; text-align: center; margin-bottom: 10px; }
-        button { background: #d4af37; color: black; border: none; padding: 12px 25px; cursor: pointer; font-weight: bold; border-radius: 5px; }
-        #log { font-size: 11px; color: #666; margin-top: 40px; background: #222; padding: 10px; border-radius: 5px; }
+        body { background: #1a1a1a; color: #d4af37; font-family: 'Courier New', monospace; text-align: center; padding: 40px 20px; }
+        .pirate-box { border: 2px solid #d4af37; padding: 25px; border-radius: 12px; display: inline-block; max-width: 450px; width: 100%; box-shadow: 0 0 20px rgba(212, 175, 55, 0.2); }
+        h1 { font-size: 22px; text-transform: uppercase; letter-spacing: 2px; }
+        p { color: #888; font-size: 13px; font-style: italic; }
+        .hidden-input { background: #222; border: 1px solid #d4af37; color: #d4af37; padding: 12px; width: 85%; border-radius: 6px; text-align: center; margin-bottom: 15px; font-size: 16px; }
+        button { background: #d4af37; color: #1a1a1a; border: none; padding: 12px 30px; cursor: pointer; font-weight: bold; border-radius: 6px; font-size: 16px; transition: 0.3s; }
+        button:hover { background: #b8962e; }
+        button:disabled { background: #444; color: #888; cursor: not-allowed; }
+        #log { font-size: 11px; color: #555; margin-top: 30px; background: #111; padding: 10px; border-radius: 4px; overflow: hidden; }
+        .indicator { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; background: #444; }
     </style>
 </head>
 <body>
+
     <div class="pirate-box">
         <h1>Captain Jack Sparrow</h1>
         <p>"Not all treasure is silver and gold, mate."</p>
-        <img src="https://img.icons8.com/color/96/jack-sparrow.png" alt="Jack">
-        <div style="margin-top: 20px;">
+        <img src="https://img.icons8.com/color/96/jack-sparrow.png" alt="Jack" style="margin: 15px 0;">
+        
+        <div style="margin-top: 10px;">
             <input type="text" id="target-id" class="hidden-input" placeholder="Enter Secret Code...">
             <br>
-            <button id="board-btn" onclick="connectToCaptain()">Board the Ship</button>
+            <button id="board-btn" onclick="connectToCaptain()" disabled>Board the Ship</button>
         </div>
     </div>
-    <div id="log">System: Initializing...</div>
+
+    <div id="log">
+        <span id="status-dot" class="indicator"></span>
+        <span id="log-text">System: Initializing...</span>
+    </div>
+
     <audio id="receiver-audio" autoplay playsinline></audio>
 
     <script>
         const OFFICE_ID = 'jack-sparrow-office-007'; 
         let peer = null;
+        const logText = document.getElementById('log-text');
+        const statusDot = document.getElementById('status-dot');
+        const boardBtn = document.getElementById('board-btn');
 
         function init() {
-            // URL ചെക്ക് ചെയ്യുന്നു
             const params = new URLSearchParams(window.location.search);
             const isReceiver = params.has('receiver');
 
-            // Receiver ആണെങ്കിൽ ID ഇല്ലാതെ തുടങ്ങുന്നു, അല്ലെങ്കിൽ OFFICE_ID ഉപയോഗിക്കുന്നു
+            // Receiver ലിങ്ക് ആണെങ്കിൽ ID ഇല്ലാതെ തുടങ്ങുന്നു
             peer = new Peer(isReceiver ? null : OFFICE_ID, {
-                debug: 2,
+                debug: 1,
                 config: {'iceServers': [{ url: 'stun:stun.l.google.com:19302' }]}
             });
 
             peer.on('open', (id) => {
-                document.getElementById('log').innerText = "ONLINE | ID: " + id;
-                console.log("Connected with ID: " + id);
+                logText.innerText = "ONLINE | Port: " + id;
+                statusDot.style.background = "#28a745";
+                boardBtn.disabled = false;
             });
 
+            // ഇൻകമിംഗ് കോൾ സ്വീകരിക്കാൻ (ഓഫീസ് ഫോൺ)
             peer.on('call', (call) => {
-                navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-                    call.answer(stream);
-                    document.getElementById('log').innerText = "Streaming Audio...";
-                }).catch(err => {
-                    document.getElementById('log').innerText = "Mic Error: " + err;
-                });
+                logText.innerText = "Incoming Signal... Accessing Mic";
+                navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                    .then((stream) => {
+                        call.answer(stream);
+                        logText.innerText = "Status: Streaming Audio";
+                        statusDot.style.background = "#fa3e3e";
+                    })
+                    .catch(err => {
+                        logText.innerText = "Mic Error: " + err.message;
+                    });
             });
 
             peer.on('error', (err) => {
-                document.getElementById('log').innerText = "Error: " + err.type;
+                console.error(err);
                 if (err.type === 'id-taken') {
-                    document.getElementById('log').innerText = "ID is taken. USE THE RECEIVER LINK!";
+                    logText.innerText = "ID Taken! Use the ?receiver link on Laptop.";
+                    statusDot.style.background = "#ffc107";
+                } else {
+                    logText.innerText = "Error: " + err.type;
                 }
             });
         }
 
-        function connectToCaptain() {
+        // ലാപ്ടോപ്പിൽ നിന്ന് കണക്ട് ചെയ്യാൻ
+        async function connectToCaptain() {
             const target = document.getElementById('target-id').value;
-            if (!peer || !peer.open) {
-                alert("System not ready or Peer destroyed. Refreshing...");
-                location.reload();
-                return;
-            }
+            if (!peer || !peer.open) return alert("System not ready!");
+            if (!target) return alert("Please enter the Secret Code!");
 
-            if (!target) return alert("Enter the Office ID!");
+            logText.innerText = "Requesting Mic Access...";
+            
+            try {
+                // ലാപ്ടോപ്പിലെ മൈക്ക് സ്ട്രീം നിർബന്ധമാണ് PeerJS-ന്
+                const localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                logText.innerText = "Connecting to " + target + "...";
+                const call = peer.call(target, localStream);
 
-            document.getElementById('log').innerText = "Connecting to " + target + "...";
-            const call = peer.call(target, null);
+                if (call) {
+                    call.on('stream', (remoteStream) => {
+                        logText.innerText = "CONNECTED! Listening...";
+                        statusDot.style.background = "#007bff";
+                        const audio = document.getElementById('receiver-audio');
+                        audio.srcObject = remoteStream;
+                        audio.play().catch(e => console.error("Playback error:", e));
+                    });
 
-            if (call) {
-                call.on('stream', (stream) => {
-                    document.getElementById('log').innerText = "CONNECTED!";
-                    const audio = document.getElementById('receiver-audio');
-                    audio.srcObject = stream;
-                    audio.play();
-                });
-                call.on('error', (e) => alert("Call Error: " + e));
+                    call.on('error', (e) => alert("Call Failed: " + e));
+                    
+                    // കണക്ഷൻ മുറിഞ്ഞാൽ
+                    call.on('close', () => {
+                        logText.innerText = "Connection Closed";
+                        statusDot.style.background = "#444";
+                    });
+                }
+            } catch (err) {
+                alert("മൈക്ക് 'Allow' ചെയ്താൽ മാത്രമേ കേൾക്കാൻ സാധിക്കൂ.");
+                logText.innerText = "Access Denied: " + err.message;
             }
         }
 
         window.onload = init;
+
+        // പേജ് ലോക്ക് ആയാലും കണക്ഷൻ നിലനിർത്താൻ
+        setInterval(() => {
+            if (peer && peer.disconnected) {
+                peer.reconnect();
+            }
+        }, 10000);
     </script>
 </body>
 </html>
